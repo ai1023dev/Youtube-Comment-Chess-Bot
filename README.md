@@ -21,15 +21,6 @@ YouTube 라이브 영상의 고정 댓글을 체스판으로 활용하는 봇입
 
 ---
 
-## 요구 사항
-
-- Python 3.10 이상
-- [Stockfish](https://stockfishchess.org/download/) 바이너리 (`./stockfish` 경로에 위치)
-- Google Cloud Console OAuth2 자격증명 (`client_secret.json`)
-- YouTube Data API v3 키
-
----
-
 ## 설치
 
 Stockfish 바이너리를 프로젝트 루트에 배치합니다. (용량 제한 때문에 안 올라가져서 [Stockfish](https://stockfishchess.org/download/)에서 직접 다운받으세요.)
