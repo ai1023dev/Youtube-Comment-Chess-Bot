@@ -6,6 +6,13 @@ YouTube 라이브 영상의 고정 댓글을 체스판으로 활용하는 봇입
 
 ---
 
+#### AR 코딩 YouTube 댓글 체스 봇 유튜브 영상
+https://www.youtube.com/watch?v=VjHDuaO8SXY
+#### AR 코딩 유튜브 채널
+https://www.youtube.com/@AR_%EC%BD%94%EB%94%A9
+
+---
+
 ## 동작 방식
 
 1. 고정 댓글의 대댓글을 최대 6,000개까지 수집합니다.
