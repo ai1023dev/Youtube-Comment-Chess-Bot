@@ -25,13 +25,39 @@ TOKEN_FILE  = Path(__file__).parent / "token.json"
 SECRET_FILE = Path(__file__).parent / "client_secret.json"
 SCOPES       = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 RECORD_FILE  = Path(__file__).parent / "win_loss_record.json"
+BOARD_FILE   = Path(__file__).parent / "board_state.fen"   # ← 추가: 체스판 상태 저장 파일
 
 if not API_KEY:
     raise ValueError("COMMENT_API_KEY 없음 — .env 파일을 확인하세요")
 
-# ── 체스 상태 ──────────────────────────────────────────────────────────────────
+# ── 체스 상태 (파일에서 복원) ──────────────────────────────────────────────────
 
-game_board = chess.Board()
+def load_board() -> chess.Board:
+    """저장된 FEN이 있으면 복원하고, 없으면 새 게임을 시작합니다."""
+    if BOARD_FILE.exists():
+        fen = BOARD_FILE.read_text(encoding="utf-8").strip()
+        try:
+            board = chess.Board(fen)
+            print(f"♟ 이전 판 복원 완료: {fen}")
+            return board
+        except ValueError:
+            print(f"[경고] board_state.fen 파싱 실패 — 새 게임 시작")
+    else:
+        print("♟ 저장된 판 없음 — 새 게임 시작")
+    return chess.Board()
+
+def save_board(board: chess.Board):
+    """현재 체스판 상태를 FEN으로 저장합니다."""
+    BOARD_FILE.write_text(board.fen(), encoding="utf-8")
+
+def reset_board(board: chess.Board):
+    """게임을 초기화하고 저장 파일도 삭제합니다."""
+    board.reset()
+    if BOARD_FILE.exists():
+        BOARD_FILE.unlink()
+    print("♟ 게임 초기화 완료, board_state.fen 삭제")
+
+game_board = load_board()   # ← 시작 시 자동 복원
 engine     = chess.engine.SimpleEngine.popen_uci("./stockfish")
 
 # ── 전적 기록 ──────────────────────────────────────────────────────────────────
@@ -115,7 +141,7 @@ def get_replies(thread_id: str) -> list[str]:
     replies      = []
     page_token   = None
     fetched      = 0
- 
+
     while fetched < MAX_REPLIES:
         try:
             req = get_read_client().comments().list(
@@ -126,30 +152,30 @@ def get_replies(thread_id: str) -> list[str]:
         except HttpError as e:
             print(f"[오류] get_replies ({e.status_code}): {e.reason}")
             break
- 
+
         items = res.get("items", [])
         fetched += len(items)
- 
+
         for item in items:
             snippet      = item["snippet"]
             text         = snippet["textDisplay"].strip()
             published_at = datetime.fromisoformat(snippet["publishedAt"].replace("Z", "+00:00"))
- 
+
             if published_at < cutoff:
                 continue
             if not bracket_move.match(text):
                 continue
- 
+
             replies.append({
                 "text":         text,
                 "like":         snippet["likeCount"],
                 "published_at": published_at,
             })
- 
+
         page_token = res.get("nextPageToken")
         if not page_token:
             break
- 
+
     print(f"대댓글 {fetched}개 조회 완료 ({len(replies)}개 후보)")
     replies.sort(key=lambda x: (x["like"], x["published_at"]), reverse=True)
     return [r["text"] for r in replies]
@@ -208,12 +234,15 @@ def apply_move(replies: list[str]) -> dict:
         game_board.push(move)
 
         if game_board.is_game_over():
+            save_board(game_board)                          # ← 추가: 종료 상태도 저장
             return {"white": white_san, "black": None,
                     "result": game_board.result(), "reason": str(game_board.outcome().termination)}
 
-        result    = engine.play(game_board, chess.engine.Limit(time=0.1))
+        result    = engine.play(game_board, chess.engine.Limit(time=0.05))
         black_san = game_board.san(result.move)
         game_board.push(result.move)
+
+        save_board(game_board)                              # ← 추가: 매 수 후 저장
 
         if game_board.is_game_over():
             return {"white": white_san, "black": black_san,
@@ -256,7 +285,7 @@ def run_job(pinned: dict):
         result_text = f"이전 판 결과: {winner_label} 승 ({move['reason']})"
         print(f"🎯 종료: {result_text}")
 
-        game_board.reset()
+        reset_board(game_board)                             # ← 변경: reset + 파일 삭제
         board_text = render_board(game_board)
         update_comment(pinned["comment_id"],
                        f"{result_text}\n새 게임 시작!\n\n{board_text}\n\n{record_line(record)}\n\n규칙과 기보법은 영상 설명란을 참조해 주세요.")
